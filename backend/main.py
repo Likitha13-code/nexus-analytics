@@ -36,22 +36,43 @@ def get_stock_history(ticker):
 def get_stock_fundamentals(ticker):
     try:
         stock = yf.Ticker(ticker)
-        info = stock.info
         
-        fundamentals = {
-            "name": info.get("longName", ticker),
-            "sector": info.get("sector", "N/A"),
-            "industry": info.get("industry", "N/A"),
-            "marketCap": info.get("marketCap", "N/A"),
-            "peRatio": info.get("trailingPE", "N/A"),
-            "forwardPE": info.get("forwardPE", "N/A"),
-            "dividendYield": info.get("dividendYield", "N/A"),
-            "fiftyTwoWeekHigh": info.get("fiftyTwoWeekHigh", "N/A"),
-            "fiftyTwoWeekLow": info.get("fiftyTwoWeekLow", "N/A"),
-            "currentPrice": info.get("currentPrice", "N/A"),
-            "summary": info.get("longBusinessSummary", "")
-        }
-        return jsonify(fundamentals)
+        try:
+            info = stock.info
+            if not info:
+                raise Exception("Empty info dictionary")
+                
+            return jsonify({
+                "currentPrice": info.get("currentPrice", info.get("regularMarketPrice", 0)),
+                "fiftyTwoWeekHigh": info.get("fiftyTwoWeekHigh", 0),
+                "fiftyTwoWeekLow": info.get("fiftyTwoWeekLow", 0),
+                "marketCap": info.get("marketCap", 0),
+                "peRatio": info.get("trailingPE", "N/A"),
+                "dividendYield": info.get("dividendYield", 0),
+                "forwardPE": info.get("forwardPE", 0),
+                "industry": info.get("industry", "N/A"),
+                "sector": info.get("sector", "N/A")
+            })
+        except Exception as info_err:
+            # Yahoo Finance often blocks .info from data center IPs (like Render)
+            # Fallback to fetching just the current price from .history()
+            hist = stock.history(period="1d")
+            if hist.empty:
+                return jsonify({"detail": "No data found for ticker"}), 404
+            
+            current_price = float(hist['Close'].iloc[-1])
+            return jsonify({
+                "currentPrice": current_price,
+                "fiftyTwoWeekHigh": "N/A",
+                "fiftyTwoWeekLow": "N/A",
+                "marketCap": "N/A",
+                "peRatio": "N/A",
+                "dividendYield": "N/A",
+                "forwardPE": "N/A",
+                "industry": "Unknown",
+                "sector": "Unknown"
+            })
+            
     except Exception as e:
         import traceback
         traceback.print_exc()
